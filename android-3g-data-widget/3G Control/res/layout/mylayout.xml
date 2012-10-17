@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/layout"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:layout_margin="8dip"
+    android:orientation="vertical"
+    android:padding="@dimen/widget_margin"
+    tools:context=".MyWidgetProvider" >
+
+    <ImageView
+        android:id="@+id/widgetIcon"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="0.17"
+        android:contentDescription="@string/todo"
+        android:src="@drawable/data_on" />
+
+    <TextView
+        android:id="@+id/widgetText"
+        style="@android:style/TextAppearance.Medium"
+        android:layout_width="wrap_content"
+        android:layout_height="40dp"
+        android:layout_gravity="center_horizontal"
+        android:layout_margin="4dip" />
+
+</LinearLayout>
