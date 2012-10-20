@@ -1,5 +1,6 @@
 package org.yarix.free.android.dtctrl;
 
+import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 
@@ -18,17 +19,22 @@ import android.widget.Toast;
 
 public class MyWidgetProvider extends AppWidgetProvider {
 	
-	private static final String TAG = "yarix";
+	private static final String TAG = "yarix-3G-Control";
+	private static final int SDK = android.os.Build.VERSION.SDK_INT;
 	private TelephonyManager telephonyManager;
 	private Object ITelephonyStub;
 	private Class<?> ITelephonyClass;
 	private Method enable3GMethod;
 	private Method disable3GMethod;
+	private Object iConnectivityManager;
+	private Method setMobileDataEnabled;
+	private ConnectivityManager connMgr;
 
 	@Override
 	public void onUpdate(Context context, AppWidgetManager appWidgetManager,
 			int[] appWidgetIds) {
 
+		Log.d(TAG,	"android.os.Build.VERSION.SDK_INT =" + SDK);
 		initTelephony(context);
 		
 		// Get all ids  
@@ -40,6 +46,8 @@ public class MyWidgetProvider extends AppWidgetProvider {
 					R.layout.mylayout);
 
 			if (enabled == null) {
+				Log.e(TAG, "try new API");
+				remoteViews.setTextViewText(R.id.widgetText, "fix?");
 				Log.e(TAG, "error: enabled =null!!");
 			} else if (enabled) {
 				remoteViews.setTextViewText(R.id.widgetText, "is On");
@@ -51,7 +59,7 @@ public class MyWidgetProvider extends AppWidgetProvider {
 						R.drawable.data_off); 
 			}
 
-			Log.i(TAG, String.valueOf("toggel returned value = " + enabled));
+			Log.d(TAG, String.valueOf("toggel returned value = " + enabled));
 
 			// Register an onClickListener
 			Intent intent = new Intent(context, MyWidgetProvider.class);
@@ -66,8 +74,16 @@ public class MyWidgetProvider extends AppWidgetProvider {
 	}
 
 	private void initTelephony(Context context) {
+		connMgr = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+		if (SDK<=8)
+			initTelephony_SDK8(context);
+		else
+			initTelephony_SDK9(context);		
+	}
+	
+	private void initTelephony_SDK8(Context context) {
 		try {
-			Log.i(TAG, "initTelephony started");
+			Log.d(TAG, "initTelephony_SDK8 started");
 			telephonyManager = (TelephonyManager) context.getSystemService(Context.TELEPHONY_SERVICE);
 			Class<?> telephonyManagerClass = Class.forName(telephonyManager.getClass().getName());
 			Method getITelephonyMethod = telephonyManagerClass.getDeclaredMethod("getITelephony");
@@ -79,7 +95,7 @@ public class MyWidgetProvider extends AppWidgetProvider {
 			disable3GMethod.setAccessible(true);
 			enable3GMethod = ITelephonyClass.getDeclaredMethod("enableDataConnectivity");
 			enable3GMethod.setAccessible(true);
-			Log.i(TAG, "initTelephony ended");
+			Log.d(TAG, "initTelephony_SDK8 ended");
 		} catch (SecurityException e) {
 			Log.e(TAG, "error " + e.getMessage());
 			e.printStackTrace();
@@ -101,14 +117,45 @@ public class MyWidgetProvider extends AppWidgetProvider {
 		}
 	}
 
+	private void initTelephony_SDK9(Context context) {//, boolean enabled) {
+	    try {
+			Log.d(TAG, "initTelephony_SDK9 started");	    	
+			final Class conmanClass = Class.forName(connMgr.getClass().getName());
+			final Field iConnectivityManagerField = conmanClass.getDeclaredField("mService");
+			iConnectivityManagerField.setAccessible(true);
+			iConnectivityManager = iConnectivityManagerField.get(connMgr);
+			final Class iConnectivityManagerClass = Class.forName(iConnectivityManager.getClass().getName());
+			setMobileDataEnabled = iConnectivityManagerClass.getDeclaredMethod("setMobileDataEnabled", Boolean.TYPE);
+			setMobileDataEnabled.setAccessible(true);
+			Log.d(TAG, "initTelephony_SDK9 ended");
+		} catch (SecurityException e) {
+			e.printStackTrace();
+		} catch (IllegalArgumentException e) {
+			e.printStackTrace();
+		} catch (ClassNotFoundException e) {
+			e.printStackTrace();
+		} catch (NoSuchFieldException e) {
+			e.printStackTrace();
+		} catch (IllegalAccessException e) {
+			e.printStackTrace();
+		} catch (NoSuchMethodException e) {
+			e.printStackTrace();
+		}
+	}
+	
 	private Boolean toggel3g(Context context) {
 		try {
 			switch (getCurrentdataStatus(context)) {
 			case MOBILE_3G:
+				Toast.makeText(context, "3G connected, disabling 3G", Toast.LENGTH_LONG).show();
+				disable3G(context);
+				return false;
 			case WIFI:
+				Toast.makeText(context, "Wifi connected, disabling 3G.", Toast.LENGTH_LONG).show();
 				disable3G(context);
 				return false;
 			case NONE:
+				Toast.makeText(context, "Turn on 3G.", Toast.LENGTH_LONG).show();
 				enable3G(context);
 				return true;
 			default:
@@ -133,40 +180,37 @@ public class MyWidgetProvider extends AppWidgetProvider {
 	}
 
 	private void enable3G(Context context) throws IllegalArgumentException, IllegalAccessException, InvocationTargetException {
-		Log.i(TAG, "enable3G started");
+		Log.d(TAG, "enable3G started");
 		RemoteViews remoteViews = new RemoteViews(context.getPackageName(),
 				R.layout.mylayout);
-			String txt = "on 3G";
 			int dr = R.drawable.data_on;
 
-			Log.i(TAG, " with " + txt + " [" + dr + "]");
-
-		remoteViews.setTextViewText(R.id.widgetText, txt);
 		remoteViews.setImageViewResource(R.id.widgetIcon, dr); 	
-		enable3GMethod.invoke(ITelephonyStub);
-		Log.i(TAG, "enable3G ended");
+		if (SDK<=8)
+			enable3GMethod.invoke(ITelephonyStub);
+		else
+			setMobileDataEnabled.invoke(iConnectivityManager, true);
+		Log.d(TAG, "enable3G ended");
 
 	}
 
 	private void disable3G(Context context) throws IllegalArgumentException, IllegalAccessException, InvocationTargetException {
-		Log.i(TAG, "disable3G started");
+		Log.d(TAG, "disable3G started");
 		RemoteViews remoteViews = new RemoteViews(context.getPackageName(),
 				R.layout.mylayout);
-		String txt = "ddd";
-		int dr = R.drawable.data_on;
-			dr = R.drawable.data_off;
-		Log.i(TAG, " with " + txt + " [" + dr + "]");
-
-		remoteViews.setTextViewText(R.id.widgetText, txt);
+		int dr = R.drawable.data_off;
 		remoteViews.setImageViewResource(R.id.widgetIcon, dr); 	
-		disable3GMethod.invoke(ITelephonyStub);
-		Log.i(TAG, "disable3G ended");
+		Log.d(TAG, "disable3G invoking ITelephonyStub");
+		if (SDK<=8)
+			disable3GMethod.invoke(ITelephonyStub);
+		else 
+			setMobileDataEnabled.invoke(iConnectivityManager, false);
+		
+		Log.d(TAG, "disable3G ended");
 
 	}
 
 	private DataStatus getCurrentdataStatus(Context context) {
-		final ConnectivityManager connMgr = (ConnectivityManager) context
-				.getSystemService(Context.CONNECTIVITY_SERVICE);
 
 		final NetworkInfo wifi = connMgr
 				.getNetworkInfo(ConnectivityManager.TYPE_WIFI);
@@ -175,14 +219,11 @@ public class MyWidgetProvider extends AppWidgetProvider {
 				.getNetworkInfo(ConnectivityManager.TYPE_MOBILE);
 		
 		if (wifi.isAvailable() && wifi.isConnected()) {
-				Toast.makeText(context, "Wifi connected, disabling 3G.", Toast.LENGTH_LONG).show();
 				return DataStatus.WIFI;
 		} 
 		else if (mobile.isAvailable() &&  mobile.isConnected()) {
-				Toast.makeText(context, "3G connected, disabling...", Toast.LENGTH_LONG).show();
 				return DataStatus.MOBILE_3G;
 		} else {
-			Toast.makeText(context, "Turn on 3G.", Toast.LENGTH_LONG).show();
 			return DataStatus.NONE;
 		}
 	}
